@@ -8,9 +8,6 @@ data:
   Corefile: |-
     .:1053 {
         errors
-        {{ if .Values.debug.enabled }}
-        debug
-        {{- end }}
         log
         health {
             lameduck 5s
