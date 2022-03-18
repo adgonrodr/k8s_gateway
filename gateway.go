@@ -35,6 +35,10 @@ var orderedResources = []*resourceWithIndex{
 		lookup: noop,
 	},
 	{
+		name:   "Gateway",
+		lookup: noop,
+	},
+	{
 		name:   "Service",
 		lookup: noop,
 	},

@@ -17,12 +17,17 @@ import (
 	gatewayapi_v1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gatewayClient "sigs.k8s.io/gateway-api/pkg/client/clientset/gateway/versioned"
 	gwFake "sigs.k8s.io/gateway-api/pkg/client/clientset/gateway/versioned/fake"
+	"istio.io/api/meta/v1alpha1"
+	"istio.io/api/networking/v1beta1"
+	istioNetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
+	istio "istio.io/client-go/pkg/clientset/versioned/fake"
 )
 
 func TestController(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	gwClient := gwFake.NewSimpleClientset()
 	nginxClient := k8s_nginx_fake.NewSimpleClientset()
+	istioClient := istio.NewSimpleClientset()
 	ctrl := &KubeController{
 		client:      client,
 		gwClient:    gwClient,
@@ -34,6 +39,7 @@ func TestController(t *testing.T) {
 	addGateways(gwClient)
 	addHTTPRoutes(gwClient)
 	addVirtualServers(nginxClient)
+	addIstioGateways(istioClient)
 
 	gw := newGateway()
 	gw.Zones = []string{"example.com."}
@@ -79,6 +85,23 @@ func TestController(t *testing.T) {
 		found, _ := gatewayIndexFunc(testObj)
 		if !isFound(index, found) {
 			t.Errorf("Gateway key %s not found in index: %v", index, found)
+		}
+	}
+
+	for index, testObj := range testIstioGateways {
+		found, _ := istioGatewayHostnameIndexFunc(testObj)
+		if !isFound(index, found) {
+			t.Errorf("Istio Gatewat key %s not found in index: %v", index, found)
+		}
+	}
+}
+
+func addIstioGateways(istioClient *istio.Clientset) {
+	ctx := context.TODO()
+	for _, gateway := range testIstioGateways {
+		_, err := istioClient.NetworkingV1beta1().Gateways("istions1").Create(ctx, gateway, meta.CreateOptions{})
+		if err != nil {
+			log.Warningf("Failed to Create Istio Gateway Objects :%s", err)
 		}
 	}
 }
@@ -178,6 +201,20 @@ var testIngresses = map[string]*networking.Ingress{
 				},
 			},
 		},
+	},
+}
+
+var testIstioGateways = map[string]*istioNetworkingv1beta1.Gateway{
+	"istio.example.org": {
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "gateway1",
+			Namespace: "istions1",
+		},
+		Spec: v1beta1.Gateway{Servers: []*v1beta1.Server{{
+			Port:  &v1beta1.Port{Number: 80, Name: "http", Protocol: "http", TargetPort: 80},
+			Hosts: []string{"istio.example.org"},
+		}}},
+		Status: v1alpha1.IstioStatus{},
 	},
 }
 

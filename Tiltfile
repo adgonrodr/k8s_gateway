@@ -1,5 +1,7 @@
 load('ext://restart_process', 'docker_build_with_restart')
 load('ext://helm_remote', 'helm_remote')
+load('ext://namespace', 'namespace_create')
+
 
 IMG = '127.0.0.1:5000/coredns'
 
@@ -61,14 +63,36 @@ k8s_kind('HTTPRoute', api_version='gateway.networking.k8s.io/v1alpha2')
 k8s_kind('Gateway', api_version='gateway.networking.k8s.io/v1alpha2')
 k8s_yaml('./test/gateway-api/crds.yml')
 
+namespace_create('istio-system',
+    allow_duplicates=True
+)
 
+namespace_create(
+    'istio-ingress',
+    labels=['istio-injection: enabled'],
+    allow_duplicates=True
+)
+
+helm_remote('base',
+            version="1.12.1",
+            repo_name='istio',
+            release_name='istio-base',
+            create_namespace=False,
+            namespace='istio-system',
+            allow_duplicates=True,
+            repo_url='https://istio-release.storage.googleapis.com/charts')
 helm_remote('istiod',
             version="1.12.1",
             repo_name='istio',
-            set=['global.istioNamespace=default', 'base.enableIstioConfigCRDs=false', 'telemetry.enabled=false'],
+            set=['telemetry.enabled=false'],
+            create_namespace=False,
+            namespace='istio-system',
+            allow_duplicates=True,
             repo_url='https://istio-release.storage.googleapis.com/charts')
 helm_remote('gateway',
             version="1.12.1",
             repo_name='istio',
-            namespace='default',
+            create_namespace=False,
+            namespace='istio-ingress',
+            allow_duplicates=True,
             repo_url='https://istio-release.storage.googleapis.com/charts')

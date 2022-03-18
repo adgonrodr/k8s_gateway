@@ -6,6 +6,7 @@ import (
 	"net"
 	"strings"
 
+	istioNetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 	nginx_v1 "github.com/nginxinc/kubernetes-ingress/pkg/apis/configuration/v1"
 	k8s_nginx "github.com/nginxinc/kubernetes-ingress/pkg/client/clientset/versioned"
 	core "k8s.io/api/core/v1"
@@ -351,6 +352,17 @@ func virtualServerHostnameIndexFunc(obj interface{}) ([]string, error) {
 	log.Debugf("Adding index %s for VirtualServer %s", virtualServer.Spec.Host, virtualServer.Name)
 
 	return []string{virtualServer.Spec.Host}, nil
+}
+
+func istioGatewayHostnameIndexFunc(gateway *istioNetworkingv1beta1.Gateway) ([]string, error) {
+	var hostnames []string
+	for _, server := range gateway.Spec.Servers {
+		for _, host := range server.Hosts {
+			log.Debugf("Adding index %s for gateway %s", host, server.Name)
+			hostnames = append(hostnames, host)
+		}
+	}
+	return hostnames, nil
 }
 
 func lookupServiceIndex(ctrl cache.SharedIndexInformer) func([]string) []net.IP {
