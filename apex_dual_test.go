@@ -14,13 +14,13 @@ import (
 
 func setupEmptyLookupFuncs() {
 
-	if resource := lookupResource("HTTPRoute"); resource != nil {
-		resource.lookup = func(_ []string) []net.IP { return []net.IP{} }
-	}
 	if resource := lookupResource("Ingress"); resource != nil {
 		resource.lookup = func(_ []string) []net.IP { return []net.IP{} }
 	}
 	if resource := lookupResource("Service"); resource != nil {
+		resource.lookup = func(_ []string) []net.IP { return []net.IP{} }
+	}
+	if resource := lookupResource("Gateway"); resource != nil {
 		resource.lookup = func(_ []string) []net.IP { return []net.IP{} }
 	}
 }
@@ -64,7 +64,7 @@ var testsDualNS = []test.Case{
 	{
 		Qname: "example.com.", Qtype: dns.TypeSOA,
 		Rcode: dns.RcodeSuccess,
-		Answer: []dns.RR{
+		Ns: []dns.RR{
 			test.SOA("example.com.	60	IN	SOA	dns1.kube-system.example.com. hostmaster.example.com. 1499347823 7200 1800 86400 5"),
 		},
 	},

@@ -26,8 +26,8 @@ type Fallen struct {
 }
 
 func TestLookup(t *testing.T) {
-	real := []string{"Ingress", "Service", "HTTPRoute", "VirtualServer"}
-	fake := []string{"Pod", "Gateway"}
+	real := []string{"Ingress", "Service", "Gateway"}
+	fake := []string{"Pod"}
 
 	for _, resource := range real {
 		if found := lookupResource(resource); found == nil {
@@ -42,7 +42,7 @@ func TestLookup(t *testing.T) {
 	}
 }
 
-func TestPlugin(t *testing.T) {
+func TestGateway(t *testing.T) {
 
 	ctrl := &KubeController{hasSynced: true}
 
@@ -50,7 +50,7 @@ func TestPlugin(t *testing.T) {
 	gw.Zones = []string{"example.com."}
 	gw.Next = test.NextHandler(dns.RcodeSuccess, nil)
 	gw.Controller = ctrl
-	setupLookupFuncs()
+	setupTestLookupFuncs()
 
 	ctx := context.TODO()
 	for i, tc := range tests {
@@ -77,7 +77,7 @@ func TestPlugin(t *testing.T) {
 	}
 }
 
-func TestPluginFallthrough(t *testing.T) {
+func TestGatewayFallthrough(t *testing.T) {
 
 	ctrl := &KubeController{hasSynced: true}
 	gw := newGateway()
@@ -85,7 +85,7 @@ func TestPluginFallthrough(t *testing.T) {
 	gw.Next = test.NextHandler(dns.RcodeSuccess, Fallen{})
 	gw.ExternalAddrFunc = selfAddressTest
 	gw.Controller = ctrl
-	setupLookupFuncs()
+	setupTestLookupFuncs()
 
 	ctx := context.TODO()
 	for i, tc := range testsFallthrough {
@@ -143,7 +143,7 @@ var tests = []test.Case{
 	// SOA for the existing domain | Test 5
 	{
 		Qname: "domain.example.com.", Qtype: dns.TypeSOA, Rcode: dns.RcodeSuccess,
-		Answer: []dns.RR{
+		Ns: []dns.RR{
 			test.SOA("example.com.	60	IN	SOA	dns1.kube-system.example.com. hostmaster.example.com. 1499347823 7200 1800 86400 5"),
 		},
 	},
@@ -182,32 +182,18 @@ var tests = []test.Case{
 			test.A("svc1.ns1.example.com.	60	IN	A	192.0.1.1"),
 		},
 	},
-	// Existing VirtualServer | Test 11
+	// Existing Istio Gateway with a mix of lower and upper case letters | Test 11
 	{
-		Qname: "vs1.example.com", Qtype: dns.TypeA, Rcode: dns.RcodeSuccess,
+		Qname: "istiO.istioNs1.exAmplE.Com.", Qtype: dns.TypeA, Rcode: dns.RcodeSuccess,
 		Answer: []dns.RR{
-			test.A("vs1.example.com.	60	IN	A	192.0.3.1"),
+			test.A("istio.istions1.example.com.	60	IN	A	192.0.0.2"),
 		},
 	},
-	// VirtualServer lookup priority over Ingress | Test 12
+	// Existing Istio Gateway | Test 12
 	{
-		Qname: "shadow-vs.example.com.", Qtype: dns.TypeA, Rcode: dns.RcodeSuccess,
+		Qname: "istio.example.com.", Qtype: dns.TypeA, Rcode: dns.RcodeSuccess,
 		Answer: []dns.RR{
-			test.A("shadow-vs.example.com.	60	IN	A	192.0.3.5"),
-		},
-	},
-	// basic gateway API lookup | Test 13
-	{
-		Qname: "domain.gw.example.com.", Qtype: dns.TypeA, Rcode: dns.RcodeSuccess,
-		Answer: []dns.RR{
-			test.A("domain.gw.example.com.	60	IN	A	192.0.2.1"),
-		},
-	},
-	// gateway API lookup priority over Ingress and VirtualServers | Test 14
-	{
-		Qname: "shadow.example.com.", Qtype: dns.TypeA, Rcode: dns.RcodeSuccess,
-		Answer: []dns.RR{
-			test.A("shadow.example.com.	60	IN	A	192.0.2.4"),
+			test.A("istio.example.com.	60	IN	A	192.0.0.1"),
 		},
 	},
 }
@@ -254,11 +240,14 @@ func testServiceLookup(keys []string) (results []net.IP) {
 }
 
 var testIngressIndexes = map[string][]net.IP{
-	"domain.example.com":    {net.ParseIP("192.0.0.1")},
-	"svc2.ns1.example.com":  {net.ParseIP("192.0.0.2")},
-	"example.com":           {net.ParseIP("192.0.0.3")},
-	"shadow.example.com":    {net.ParseIP("192.0.0.4")},
-	"shadow-vs.example.com": {net.ParseIP("192.0.0.5")},
+	"domain.example.com":   {net.ParseIP("192.0.0.1")},
+	"svc2.ns1.example.com": {net.ParseIP("192.0.0.2")},
+	"example.com":          {net.ParseIP("192.0.0.3")},
+}
+
+var testGatewayIndexes = map[string][]net.IP{
+	"istio.example.com":          {net.ParseIP("192.0.0.1")},
+	"istio.istions1.example.com": {net.ParseIP("192.0.0.2")},
 }
 
 func testIngressLookup(keys []string) (results []net.IP) {
@@ -268,42 +257,21 @@ func testIngressLookup(keys []string) (results []net.IP) {
 	return results
 }
 
-var testVirtualServerIndexes = map[string][]net.IP{
-	"vs1.example.com":       {net.ParseIP("192.0.3.1")},
-	"shadow.example.com":    {net.ParseIP("192.0.3.4")},
-	"shadow-vs.example.com": {net.ParseIP("192.0.3.5")},
-}
-
-func testVirtualServerLookup(keys []string) (results []net.IP) {
+func testGatewayLookup(keys []string) (results []net.IP) {
 	for _, key := range keys {
-		results = append(results, testVirtualServerIndexes[strings.ToLower(key)]...)
+		results = append(results, testGatewayIndexes[strings.ToLower(key)]...)
 	}
 	return results
 }
 
-var testHTTPRouteIndexes = map[string][]net.IP{
-	"domain.gw.example.com": {net.ParseIP("192.0.2.1")},
-	"shadow.example.com":    {net.ParseIP("192.0.2.4")},
-}
-
-func testHTTPRouteLookup(keys []string) (results []net.IP) {
-	for _, key := range keys {
-		results = append(results, testHTTPRouteIndexes[strings.ToLower(key)]...)
-	}
-	return results
-}
-
-func setupLookupFuncs() {
+func setupTestLookupFuncs() {
 	if resource := lookupResource("Ingress"); resource != nil {
 		resource.lookup = testIngressLookup
 	}
 	if resource := lookupResource("Service"); resource != nil {
 		resource.lookup = testServiceLookup
 	}
-	if resource := lookupResource("VirtualServer"); resource != nil {
-		resource.lookup = testVirtualServerLookup
-	}
-	if resource := lookupResource("HTTPRoute"); resource != nil {
-		resource.lookup = testHTTPRouteLookup
+	if resource := lookupResource("Gateway"); resource != nil {
+		resource.lookup = testGatewayLookup
 	}
 }

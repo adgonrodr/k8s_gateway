@@ -19,24 +19,15 @@ type resourceWithIndex struct {
 	lookup lookupFunc
 }
 
-var noop lookupFunc = func([]string) (result []net.IP) { return }
-
 var orderedResources = []*resourceWithIndex{
 	{
-		name:   "HTTPRoute",
-		lookup: noop,
+		name: "Gateway",
 	},
 	{
-		name:   "VirtualServer",
-		lookup: noop,
+		name: "Ingress",
 	},
 	{
-		name:   "Ingress",
-		lookup: noop,
-	},
-	{
-		name:   "Service",
-		lookup: noop,
+		name: "Service",
 	},
 }
 
@@ -187,7 +178,7 @@ func (gw *Gateway) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 		// Force to true to fix broken behaviour of legacy glibc `getaddrinfo`.
 		// See https://github.com/coredns/coredns/pull/3573
 		m.Authoritative = true
-		m.Answer = []dns.RR{gw.soa(state)}
+		m.Ns = []dns.RR{gw.soa(state)}
 
 	case dns.TypeNS:
 
@@ -251,7 +242,6 @@ func (gw *Gateway) SelfAddress(state request.Request) (records []dns.RR) {
 	}
 
 	return records
-	//return records
 }
 
 // Strips the zone from FQDN and return a hostname
